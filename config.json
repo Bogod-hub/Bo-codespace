@@ -1,0 +1,21 @@
+{
+  "watch_dir": "C:\\Users\\YourName\\YourProject",
+  "interval_hours": 12,
+  "push_retry": 3,
+  "push_retry_delay": 5,
+  "log_dir": "logs",
+  "clean_extensions": [
+    ".obj", ".lst", ".m51", ".lnp", ".__i", ".htm",
+    ".build_log.htm", ".plg", ".crf", ".dep", ".d",
+    ".o", ".iex", ".map", ".bak"
+  ],
+  "clean_filenames": [
+    "Thumbs.db", "ehthumbs.db", "Desktop.ini", ".DS_Store"
+  ],
+  "clean_dirs": ["Objects", "Listings", "DebugConfig"],
+  "remove_dirs": [],
+  "keep_extensions": [
+    ".hex", ".uvproj", ".uvmpw", ".uvopt",
+    ".uvgui", ".c", ".h", ".s", ".gitignore"
+  ]
+}
