@@ -1,6 +1,5 @@
 {
-  "watch_dir": "G:\\Bogod\\Documents\\trae-list\\Keil-project-mirror",
-  "source_dir": "C:\\Users\\Bogod\\Desktop\\Keil project",
+  "watch_dir": "C:\\Users\\Bogod\\Desktop\\Keil project",
   "interval_hours": 12,
   "push_retry": 3,
   "push_retry_delay": 5,
