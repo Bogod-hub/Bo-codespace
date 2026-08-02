@@ -1,9 +1,13 @@
 {
-  "watch_dir": "C:\\Users\\YourName\\YourProject",
+  "watch_dir": "C:\\Users\\Bogod\\Desktop\\Keil project",
   "interval_hours": 12,
   "push_retry": 3,
   "push_retry_delay": 5,
   "log_dir": "logs",
+  "github_user": "",
+  "auto_update_remote": true,
+  "network_check": true,
+  "network_timeout": 10,
   "clean_extensions": [
     ".obj", ".lst", ".m51", ".lnp", ".__i", ".htm",
     ".build_log.htm", ".plg", ".crf", ".dep", ".d",
