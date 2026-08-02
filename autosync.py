@@ -16,6 +16,7 @@ Keil project 定时同步到 GitHub（稳定性增强版）
   - 状态持久化（记录同步历史与错误统计）
   - push 前网络连通性检查
   - 更完善的错误恢复与重试机制
+  - 镜像同步模式：TRAE 虚拟文件系统下通过 git ls-files + 逐文件复制绕过目录枚举限制
 
 不依赖第三方库，纯标准库实现。
 启动时立即执行一次，之后每 interval_hours 小时执行一次。
@@ -229,11 +230,89 @@ class StateManager:
         self.save()
 
 
+# ==================== 镜像同步（TRAE 虚拟文件系统绕过）====================
+class MirrorSync:
+    """将 TRAE 虚拟化路径的文件镜像到非虚拟化路径，绕过目录枚举限制"""
+
+    def __init__(self, source_dir, work_dir, git_exe):
+        self.source_dir = Path(source_dir)
+        self.work_dir = Path(work_dir)
+        self.git_exe = git_exe
+        self.copied_count = 0
+        self.skipped_count = 0
+        self.missing_count = 0
+
+    def _git_src(self, *args):
+        """用 --git-dir 在源仓库上执行 git 命令（读取索引）"""
+        git_dir = str(self.source_dir / ".git")
+        try:
+            r = subprocess.run(
+                [self.git_exe, f"--git-dir={git_dir}"] + list(args),
+                capture_output=True, text=True, timeout=60,
+            )
+            return r.returncode, r.stdout.strip(), r.stderr.strip()
+        except Exception as ex:
+            return -1, "", str(ex)
+
+    def get_tracked_files(self):
+        """从源仓库 git 索引获取已跟踪文件列表"""
+        c, o, e = self._git_src("ls-files")
+        if c != 0:
+            logging.error(f"  获取源仓库 ls-files 失败: {e}")
+            return []
+        return [f.strip() for f in o.splitlines() if f.strip()]
+
+    def mirror(self):
+        """执行一次镜像同步：从 source_dir 复制文件到 watch_dir"""
+        self.copied_count = 0
+        self.skipped_count = 0
+        self.missing_count = 0
+
+        logging.info("--- 镜像同步开始 ---")
+        logging.info(f"  源目录: {self.source_dir}")
+        logging.info(f"  镜像目录: {self.work_dir}")
+
+        if not self.source_dir.exists():
+            logging.error(f"  源目录不存在: {self.source_dir}")
+            return False
+
+        self.work_dir.mkdir(parents=True, exist_ok=True)
+
+        tracked = self.get_tracked_files()
+        if not tracked:
+            logging.warning("  未获取到跟踪文件列表")
+            return False
+
+        logging.info(f"  跟踪文件: {len(tracked)} 个")
+
+        for rel_path in tracked:
+            src = self.source_dir / rel_path
+            dst = self.work_dir / rel_path
+            if not src.exists():
+                self.missing_count += 1
+                continue
+            try:
+                dst.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(str(src), str(dst))
+                self.copied_count += 1
+            except Exception as ex:
+                logging.warning(f"  复制失败: {rel_path} - {ex}")
+                self.skipped_count += 1
+
+        logging.info(
+            f"镜像同步完成: 复制 {self.copied_count}, "
+            f"跳过 {self.skipped_count}, 缺失 {self.missing_count}"
+        )
+        return self.copied_count > 0
+
+
 # ==================== 配置管理 ====================
 CONFIG_PATH = Path(__file__).parent / "config.json"
 
 DEFAULT_CONFIG = {
-    "watch_dir": r"C:\Users\Bogod\Desktop\Keil project",
+    "watch_dir": r"G:\Bogod\Documents\trae-list\Keil-project-mirror",
+    # 镜像模式：TRAE 虚拟化路径（设为空则不启用镜像模式）
+    "source_dir": r"C:\Users\Bogod\Desktop\Keil project",
     "interval_hours": 12,
     "push_retry": 3,
     "push_retry_delay": 5,
@@ -731,6 +810,8 @@ def main():
     logging.info("=" * 56)
     logging.info("Keil project → GitHub 定时同步（稳定性增强版）")
     logging.info(f"扫描目录: {cfg['watch_dir']}")
+    if cfg.get("source_dir"):
+        logging.info(f"镜像源目录: {cfg['source_dir']}")
     logging.info(f"间隔: 每 {cfg['interval_hours']} 小时")
     logging.info(f"push重试: {cfg['push_retry']} 次")
     logging.info(f"仓库重命名检测: {'开启' if cfg.get('auto_update_remote') else '关闭'}")
@@ -813,6 +894,13 @@ def main():
                 continue
 
             try:
+                # 0. 镜像同步（如果配置了 source_dir）
+                if cfg.get("source_dir"):
+                    mirror = MirrorSync(
+                        cfg["source_dir"], cfg["watch_dir"], git_exe
+                    )
+                    mirror.mirror()
+
                 # 1. 磁盘清理
                 cleaner.run()
                 # 2. git 同步
